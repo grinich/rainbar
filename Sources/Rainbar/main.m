@@ -744,7 +744,9 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
         return NO;
     }
 
-    _nodeRemainingDurations[nodeIndex] = (NSTimeInterval)((double)remainingFrames / sampleRate);
+    NSTimeInterval scheduledDuration = (NSTimeInterval)((double)remainingFrames / sampleRate);
+    NSTimeInterval quietTailSkipDuration = [self quietTailSkipDurationForTrackIdentifier:trackIdentifier];
+    _nodeRemainingDurations[nodeIndex] = fmax(1.0, scheduledDuration - quietTailSkipDuration);
     _nodeStartTimes[nodeIndex] = [NSDate timeIntervalSinceReferenceDate];
 
     [node scheduleSegment:file
@@ -786,6 +788,22 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     }
 
     return powf(10.0f, gainInDecibels.floatValue / 20.0f);
+}
+
+- (NSTimeInterval)quietTailSkipDurationForTrackIdentifier:(NSString *)trackIdentifier {
+    static NSDictionary<NSString *, NSNumber *> *skipDurationByTrackIdentifier;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        skipDurationByTrackIdentifier = @{
+            @"ArizonaMonsoon": @(48.0),
+            @"HawaiiLanai": @(4.5),
+            @"LeipzigSpringRain": @(2.5),
+            @"ManhattanStorm": @(5.5)
+        };
+    });
+
+    NSNumber *skipDuration = skipDurationByTrackIdentifier[trackIdentifier];
+    return skipDuration ? skipDuration.doubleValue : 0.0;
 }
 
 - (NSTimeInterval)randomStartOffsetForDuration:(NSTimeInterval)duration {

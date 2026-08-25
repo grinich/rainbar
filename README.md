@@ -79,7 +79,7 @@ The build writes `build/Rainbar.app`. It uses only Apple system frameworks: AppK
 
 ## Audio Behavior
 
-Rainbar streams bundled MP3 files through `AVAudioEngine`. Each track starts from a random point in the first 30 seconds, then the app schedules a second player node near the end and crossfades into the next loop. Track changes also crossfade.
+Rainbar streams bundled MP3 files through `AVAudioEngine`. Each track starts from a random point in the first 30 seconds, then the app schedules a second player node near the end and crossfades into the next loop. Tracks with known quiet tails start that crossfade before the quiet ending. Track changes also crossfade.
 
 The user-facing volume slider is mapped to a perceptual-ish gain curve, and each track has a measured playback gain adjustment so quieter recordings, such as Arizona Monsoon, sit closer to the rest of the library.
 
