@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/macOS-13%2B-lightgrey.svg" alt="macOS 13 or newer">
-  <img src="https://img.shields.io/badge/AppKit-native-black.svg" alt="Native AppKit app">
+  <a href="https://github.com/grinich/rainbar/releases/latest/download/Rainbar.app.zip">
+    <img src="https://img.shields.io/badge/Download-Rainbar.app.zip-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rainbar.app.zip">
+  </a>
 </p>
 
 <p align="center">
@@ -55,12 +55,6 @@ Rainbar bundles CC0/public-domain rain audio from Freesound and Rain Sounds for 
 Full attribution and source URLs live in [Resources/AudioCredits.txt](Resources/AudioCredits.txt).
 
 ## Install
-
-<p align="center">
-  <a href="https://github.com/grinich/rainbar/releases/latest/download/Rainbar.app.zip">
-    <img src="https://img.shields.io/badge/Download-Rainbar.app.zip-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rainbar.app.zip">
-  </a>
-</p>
 
 Unzip the download, then move `Rainbar.app` to `/Applications` and open it.
 
