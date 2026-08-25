@@ -1,0 +1,125 @@
+Rainbar bundles the Freesound preview MP3 of "rain in tent.wav".
+
+Author: venaportae
+Source: https://freesound.org/people/venaportae/sounds/174874/
+License: CC0
+
+Bundled as:
+- Siberian Tent Rain
+
+Rainbar bundles the Freesound preview MP3 of "ANMLAmph-EXT_ATMOSPHERE-Ambience Of Coqui Frogs On Big Island Of Hawaii And Slight Rain Falling From The House Gutters_YMLT_NONE_94711331".
+
+Author: YouMightLikeThis
+Source: https://freesound.org/people/YouMightLikeThis/sounds/824225/
+License: CC0
+
+Bundled as:
+- Hawaii Lanai
+
+Rainbar bundles the Freesound preview MP3 of "Rain heavy 1 (rural)".
+
+Author: jmbphilmes
+Source: https://freesound.org/people/jmbphilmes/sounds/200270/
+License: CC0
+
+Bundled as:
+- Brazil Rural Rain
+
+Rainbar bundles the Freesound preview MP3 of "Distant Thunder Jesolo".
+
+Author: myLoop
+Source: https://freesound.org/people/myLoop/sounds/856815/
+License: CC0
+
+Bundled as:
+- Italy Rooftop Storm
+
+Rainbar bundles the Freesound preview MP3 of "Tropical Rain - Heavy with dripping on concrete floor".
+
+Author: nyoz
+Source: https://freesound.org/people/nyoz/sounds/614204/
+License: CC0
+
+Bundled as:
+- Tropical Island Rain
+
+Rainbar bundles the Freesound preview MP3 of "rain_traffic_thunder.flac".
+
+Author: larsl
+Source: https://freesound.org/people/larsl/sounds/40173/
+License: CC0
+
+Bundled as:
+- Sweden Traffic Rain
+
+Rainbar bundles the Freesound preview MP3 of "Urban4-Light-rain-mosque-calls.wav".
+
+Author: urbanson4
+Source: https://freesound.org/people/urbanson4/sounds/319503/
+License: CC0
+
+Bundled as:
+- Bangladesh Rain Street
+
+Rainbar bundles the Freesound preview MP3 of "Arizona Monsoon, Rain sound".
+
+Author: Xfrtrex
+Source: https://freesound.org/people/Xfrtrex/sounds/815364/
+License: CC0
+
+Bundled as:
+- Arizona Monsoon
+
+Rainbar bundles CC0 Freesound-sourced MP3 layers from Rain Sounds for Sleeping.
+
+Sources:
+- https://rainsoundsforsleeping.com/audio/leaves.mp3
+License details: https://rainsoundsforsleeping.com/licensing/
+
+Bundled as:
+- Forest Canopy
+
+Rainbar bundles the Freesound preview MP3 of "gentle steady spring rain city".
+
+Author: Garuda1982
+Source: https://freesound.org/people/Garuda1982/sounds/852917/
+License: CC0
+
+Bundled as:
+- Germany Spring Rain
+
+Rainbar bundles the Freesound preview MP3 of "Rain and thunder 12th Street Manhattan.wav".
+
+Author: petewyer2
+Source: https://freesound.org/people/petewyer2/sounds/637304/
+License: CC0
+
+Bundled as:
+- New York Storm
+
+Rainbar bundles the Freesound preview MP3 of "Urban Rain".
+
+Author: AlexMilsom
+Source: https://freesound.org/people/AlexMilsom/sounds/750303/
+License: CC0
+
+Bundled as:
+- London Rain
+
+Rainbar bundles the Freesound preview MP3 of "THUNDER and rain.wav".
+
+Author: Fhmediahmo
+Source: https://freesound.org/people/Fhmediahmo/sounds/646475/
+License: CC0
+
+Bundled as:
+- Mexico Desert Storm
+
+Rainbar bundles the Freesound preview MP3 of "Rain Storm in City".
+
+Author: mycompasstv
+Source: https://freesound.org/people/mycompasstv/sounds/466448/
+License: CC0
+
+Bundled as:
+- Toronto Wet Streets
