@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/grinich/rainbar/releases/latest/download/Rainbar.app.zip">
-    <img src="docs/media/download-button.svg" width="312" alt="Download Rainbar for macOS">
+    <img src="docs/media/download-button-flat.svg" width="312" alt="Download Rainbar for macOS">
   </a>
 </p>
 
