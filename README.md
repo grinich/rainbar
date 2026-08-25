@@ -46,6 +46,7 @@ Rainbar bundles CC0/public-domain rain audio from Freesound and Rain Sounds for 
 | Tropical Island Rain | Heavy tropical rain on a concrete terrace |
 | Sweden Traffic Rain | Urban rain, traffic, and thunder from Stockholm |
 | Bangladesh Rain Street | Light urban rain and mosque calls from Khulna |
+| Mumbai Rain | Night rain striking a balcony shade in Mumbai |
 | Brazil Rural Rain | Heavy rural rain |
 | Forest Canopy | Forest rain hitting understory leaves |
 | Arizona Monsoon | Long desert monsoon rain |
