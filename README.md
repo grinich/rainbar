@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/rainbar-screenshot.png" width="560" alt="Rainbar menu bar dropdown showing rain tracks and volume controls">
+  <img src="docs/media/rainbar-screenshot.png" width="280" alt="Rainbar menu bar dropdown showing rain tracks and volume controls">
 </p>
 
 ## Highlights
