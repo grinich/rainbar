@@ -8,6 +8,7 @@
 static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
 static NSString *const RainbarSelectedTrackIdentifierDefaultsKey = @"RainbarSelectedTrackIdentifier";
 static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
+static NSString *const RainbarLastUpdateCheckDateDefaultsKey = @"RainbarLastUpdateCheckDate";
 
 @interface RainUpdater : NSObject
 
@@ -46,8 +47,9 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
 }
 
 - (void)checkAutomatically {
-    NSDate *lastCheckDate = [[NSUserDefaults standardUserDefaults] objectForKey:@"RainbarLastUpdateCheckDate"];
+    NSDate *lastCheckDate = [[NSUserDefaults standardUserDefaults] objectForKey:RainbarLastUpdateCheckDateDefaultsKey];
     if ([lastCheckDate isKindOfClass:NSDate.class] && [[NSDate date] timeIntervalSinceDate:lastCheckDate] < (24.0 * 60.0 * 60.0)) {
+        NSLog(@"Rainbar updater: skipped automatic check because it already ran recently.");
         return;
     }
 
@@ -69,7 +71,7 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     }
 
     [self setBusy:YES];
-    [[NSUserDefaults standardUserDefaults] setObject:[NSDate date] forKey:@"RainbarLastUpdateCheckDate"];
+    NSLog(@"Rainbar updater: checking GitHub Releases.");
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     request.timeoutInterval = 20.0;
@@ -91,9 +93,9 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
                              error:(NSError *)error
                 presentingNoUpdate:(BOOL)presentNoUpdate {
     _releaseTask = nil;
-    [self setBusy:NO];
 
     if (error) {
+        [self setBusy:NO];
         [self presentErrorIfNeeded:error presenting:presentNoUpdate];
         return;
     }
@@ -102,6 +104,7 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     if (httpResponse.statusCode < 200 || httpResponse.statusCode >= 300) {
         NSError *statusError = [self errorWithDescription:[NSString stringWithFormat:@"GitHub returned HTTP %ld while checking for updates.", (long)httpResponse.statusCode]
                                                      code:20];
+        [self setBusy:NO];
         [self presentErrorIfNeeded:statusError presenting:presentNoUpdate];
         return;
     }
@@ -109,6 +112,7 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     NSError *jsonError = nil;
     id jsonObject = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
     if (!jsonObject || ![jsonObject isKindOfClass:NSDictionary.class]) {
+        [self setBusy:NO];
         [self presentErrorIfNeeded:jsonError ?: [self errorWithDescription:@"GitHub returned an unreadable update response." code:21]
                          presenting:presentNoUpdate];
         return;
@@ -120,13 +124,17 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     NSURL *downloadURL = [self downloadURLFromRelease:release];
 
     if (latestVersion.length == 0 || !downloadURL) {
+        [self setBusy:NO];
         [self presentErrorIfNeeded:[self errorWithDescription:@"The latest GitHub release does not include a Rainbar app download." code:22]
                          presenting:presentNoUpdate];
         return;
     }
 
     NSString *currentVersion = [self currentVersion];
+    NSLog(@"Rainbar updater: latest release %@, current app %@.", latestVersion, currentVersion);
     if ([self compareVersion:latestVersion toVersion:currentVersion] != NSOrderedDescending) {
+        [self markUpdateCheckComplete];
+        [self setBusy:NO];
         if (presentNoUpdate) {
             [self presentInformationalAlertWithTitle:@"Rainbar is up to date"
                                              message:[NSString stringWithFormat:@"You are running Rainbar %@.", currentVersion]];
@@ -134,7 +142,7 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
         return;
     }
 
-    [self downloadAndInstallVersion:latestVersion fromURL:downloadURL];
+    [self downloadAndInstallVersion:latestVersion fromURL:downloadURL presenting:presentNoUpdate];
 }
 
 - (NSURL *)downloadURLFromRelease:(NSDictionary *)release {
@@ -155,12 +163,11 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     return nil;
 }
 
-- (void)downloadAndInstallVersion:(NSString *)version fromURL:(NSURL *)downloadURL {
-    if (_busy) {
-        return;
+- (void)downloadAndInstallVersion:(NSString *)version fromURL:(NSURL *)downloadURL presenting:(BOOL)presenting {
+    if (!_busy) {
+        [self setBusy:YES];
     }
-
-    [self setBusy:YES];
+    NSLog(@"Rainbar updater: downloading %@ from %@.", version, downloadURL.absoluteString);
 
     __weak typeof(self) weakSelf = self;
     _downloadTask = [[NSURLSession sharedSession] downloadTaskWithURL:downloadURL
@@ -169,17 +176,17 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
         if (error) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [weakSelf setBusy:NO];
-                [weakSelf presentErrorIfNeeded:error presenting:YES];
+                [weakSelf presentErrorIfNeeded:error presenting:presenting];
             });
             return;
         }
 
-        [weakSelf extractAndInstallDownloadedZipAtURL:location version:version];
+        [weakSelf extractAndInstallDownloadedZipAtURL:location version:version presenting:presenting];
     }];
     [_downloadTask resume];
 }
 
-- (void)extractAndInstallDownloadedZipAtURL:(NSURL *)location version:(NSString *)version {
+- (void)extractAndInstallDownloadedZipAtURL:(NSURL *)location version:(NSString *)version presenting:(BOOL)presenting {
     NSFileManager *fileManager = NSFileManager.defaultManager;
     NSURL *updateDirectory = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES] URLByAppendingPathComponent:[[NSUUID UUID] UUIDString] isDirectory:YES];
     NSURL *zipURL = [updateDirectory URLByAppendingPathComponent:_assetName];
@@ -189,17 +196,18 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
         ![fileManager moveItemAtURL:location toURL:zipURL error:&error]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self setBusy:NO];
-            [self presentErrorIfNeeded:error presenting:YES];
+            [self presentErrorIfNeeded:error presenting:presenting];
         });
         return;
     }
 
+    NSLog(@"Rainbar updater: downloaded update to %@.", zipURL.path);
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSError *extractError = nil;
         if (![self extractZipAtURL:zipURL intoDirectory:updateDirectory error:&extractError]) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self setBusy:NO];
-                [self presentErrorIfNeeded:extractError presenting:YES];
+                [self presentErrorIfNeeded:extractError presenting:presenting];
             });
             return;
         }
@@ -208,14 +216,13 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
         if (![self validateAppAtURL:newAppURL expectedVersion:version error:&extractError]) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self setBusy:NO];
-                [self presentErrorIfNeeded:extractError presenting:YES];
+                [self presentErrorIfNeeded:extractError presenting:presenting];
             });
             return;
         }
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self setBusy:NO];
-            [self installExtractedAppAtURL:newAppURL updateDirectory:updateDirectory];
+            [self installExtractedAppAtURL:newAppURL updateDirectory:updateDirectory presenting:presenting];
         });
     });
 }
@@ -274,15 +281,19 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     return YES;
 }
 
-- (void)installExtractedAppAtURL:(NSURL *)newAppURL updateDirectory:(NSURL *)updateDirectory {
+- (void)installExtractedAppAtURL:(NSURL *)newAppURL updateDirectory:(NSURL *)updateDirectory presenting:(BOOL)presenting {
     NSURL *currentAppURL = NSBundle.mainBundle.bundleURL.URLByResolvingSymlinksInPath;
     NSURL *parentURL = currentAppURL.URLByDeletingLastPathComponent;
     NSFileManager *fileManager = NSFileManager.defaultManager;
+    BOOL isDirectory = NO;
+    BOOL appExists = [fileManager fileExistsAtPath:currentAppURL.path isDirectory:&isDirectory] && isDirectory;
 
-    if (![fileManager isWritableFileAtPath:currentAppURL.path] || ![fileManager isWritableFileAtPath:parentURL.path]) {
+    if (!((appExists && [fileManager isWritableFileAtPath:currentAppURL.path]) ||
+          (!appExists && [fileManager isWritableFileAtPath:parentURL.path]))) {
+        [self setBusy:NO];
         [self presentErrorIfNeeded:[self errorWithDescription:@"Rainbar does not have permission to replace the current app. Download the latest release from GitHub and replace Rainbar.app manually."
                                                          code:50]
-                         presenting:YES];
+                         presenting:presenting];
         return;
     }
 
@@ -292,24 +303,37 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
         "NEW_APP=\"$2\"\n"
         "APP_PID=\"$3\"\n"
         "UPDATE_DIR=\"$4\"\n"
+        "PREF_DOMAIN=\"com.grinich.rainbar\"\n"
+        "log() { /usr/bin/logger -t RainbarUpdater \"Rainbar updater: $1\"; }\n"
+        "log \"waiting for app to quit\"\n"
         "while kill -0 \"$APP_PID\" 2>/dev/null; do\n"
         "  sleep 0.2\n"
         "done\n"
-        "BACKUP=\"${APP_PATH}.previous\"\n"
+        "BACKUP=\"$UPDATE_DIR/Rainbar.app.previous\"\n"
         "rm -rf \"$BACKUP\"\n"
-        "if [ -e \"$APP_PATH\" ]; then\n"
-        "  mv \"$APP_PATH\" \"$BACKUP\" || exit 1\n"
+        "if [ -d \"$APP_PATH\" ]; then\n"
+        "  log \"backing up current app\"\n"
+        "  /usr/bin/ditto \"$APP_PATH\" \"$BACKUP\" || exit 1\n"
+        "  log \"clearing current app bundle\"\n"
+        "  /usr/bin/find \"$APP_PATH\" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || exit 1\n"
+        "else\n"
+        "  /bin/mkdir -p \"$APP_PATH\" || exit 1\n"
         "fi\n"
+        "log \"installing new app bundle\"\n"
         "if /usr/bin/ditto \"$NEW_APP\" \"$APP_PATH\"; then\n"
         "  /usr/bin/xattr -dr com.apple.quarantine \"$APP_PATH\" 2>/dev/null || true\n"
+        "  log \"opening updated app\"\n"
         "  /usr/bin/open \"$APP_PATH\"\n"
-        "  rm -rf \"$BACKUP\"\n"
         "  rm -rf \"$UPDATE_DIR\"\n"
         "  exit 0\n"
         "fi\n"
-        "rm -rf \"$APP_PATH\"\n"
-        "if [ -e \"$BACKUP\" ]; then\n"
-        "  mv \"$BACKUP\" \"$APP_PATH\"\n"
+        "log \"install failed, restoring previous app\"\n"
+        "/usr/bin/defaults delete \"$PREF_DOMAIN\" RainbarLastUpdateCheckDate 2>/dev/null || true\n"
+        "if [ -d \"$APP_PATH\" ]; then\n"
+        "  /usr/bin/find \"$APP_PATH\" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true\n"
+        "fi\n"
+        "if [ -d \"$BACKUP\" ]; then\n"
+        "  /usr/bin/ditto \"$BACKUP\" \"$APP_PATH\"\n"
         "  /usr/bin/open \"$APP_PATH\"\n"
         "fi\n"
         "exit 1\n";
@@ -317,7 +341,8 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     NSError *error = nil;
     if (![script writeToURL:scriptURL atomically:YES encoding:NSUTF8StringEncoding error:&error] ||
         ![fileManager setAttributes:@{NSFilePosixPermissions: @0700} ofItemAtPath:scriptURL.path error:&error]) {
-        [self presentErrorIfNeeded:error presenting:YES];
+        [self setBusy:NO];
+        [self presentErrorIfNeeded:error presenting:presenting];
         return;
     }
 
@@ -328,12 +353,18 @@ static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
     @try {
         [task launch];
     } @catch (NSException *exception) {
+        [self setBusy:NO];
         [self presentErrorIfNeeded:[self errorWithDescription:[NSString stringWithFormat:@"Could not start the updater: %@", exception.reason] code:51]
-                         presenting:YES];
+                         presenting:presenting];
         return;
     }
 
+    NSLog(@"Rainbar updater: installer launched, quitting for relaunch.");
     [NSApp terminate:nil];
+}
+
+- (void)markUpdateCheckComplete {
+    [[NSUserDefaults standardUserDefaults] setObject:[NSDate date] forKey:RainbarLastUpdateCheckDateDefaultsKey];
 }
 
 - (NSString *)currentVersion {
