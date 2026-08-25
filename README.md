@@ -15,6 +15,10 @@
   <img src="https://img.shields.io/badge/AppKit-native-black.svg" alt="Native AppKit app">
 </p>
 
+<p align="center">
+  <img src="docs/media/rainbar-screenshot.png" width="560" alt="Rainbar menu bar dropdown showing rain tracks and volume controls">
+</p>
+
 ## Highlights
 
 - Native menu bar app with no Dock icon.
