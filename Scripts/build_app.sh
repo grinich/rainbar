@@ -30,6 +30,7 @@ CLANG="$(xcrun --find clang)"
     -fmodules-cache-path="$MODULE_CACHE_DIR" \
     -framework AppKit \
     -framework AVFoundation \
+    -framework ServiceManagement \
     "$ROOT_DIR/Sources/Rainbar/main.m" \
     -o "$MACOS_DIR/$APP_NAME"
 

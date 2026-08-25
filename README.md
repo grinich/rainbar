@@ -29,7 +29,9 @@
 - Randomized start position, so the same track does not always begin the same way.
 - Crossfaded looping to avoid a dead pause when a track repeats.
 - Per-track playback gain normalization, so switching tracks does not swing wildly in volume.
-- Built-in GitHub Releases update checks.
+- Built-in GitHub Releases updates with automatic relaunch.
+- Open at Login support from the Rainbar menu.
+- Remembers the selected rain track and volume level between launches.
 - No accounts, analytics, telemetry, or background services after launch.
 
 ## Rain Tracks
@@ -82,7 +84,7 @@ The user-facing volume slider is mapped to a perceptual-ish gain curve, and each
 
 ## Updates
 
-Rainbar checks GitHub Releases once a day after launch. If a newer release is available, it can download `Rainbar.app.zip`, replace the current app bundle, and relaunch.
+Rainbar checks GitHub Releases once a day after launch. If a newer release is available, it downloads `Rainbar.app.zip`, replaces the current app bundle, quits, and relaunches.
 
 You can also check manually from the Rainbar menu.
 

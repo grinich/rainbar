@@ -1,10 +1,13 @@
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <ServiceManagement/ServiceManagement.h>
 #import <math.h>
 #import <stdlib.h>
 #import <unistd.h>
 
 static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
+static NSString *const RainbarSelectedTrackIdentifierDefaultsKey = @"RainbarSelectedTrackIdentifier";
+static NSString *const RainbarVolumeDefaultsKey = @"RainbarVolume";
 
 @interface RainUpdater : NSObject
 
@@ -131,7 +134,7 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
         return;
     }
 
-    [self presentUpdateAlertForVersion:latestVersion downloadURL:downloadURL];
+    [self downloadAndInstallVersion:latestVersion fromURL:downloadURL];
 }
 
 - (NSURL *)downloadURLFromRelease:(NSDictionary *)release {
@@ -150,20 +153,6 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
     }
 
     return nil;
-}
-
-- (void)presentUpdateAlertForVersion:(NSString *)version downloadURL:(NSURL *)downloadURL {
-    [NSApp activateIgnoringOtherApps:YES];
-
-    NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = [NSString stringWithFormat:@"Rainbar %@ is available", version];
-    alert.informativeText = @"Download and install the latest release now? Rainbar will quit and relaunch after updating.";
-    [alert addButtonWithTitle:@"Update and Relaunch"];
-    [alert addButtonWithTitle:@"Later"];
-
-    if ([alert runModal] == NSAlertFirstButtonReturn) {
-        [self downloadAndInstallVersion:version fromURL:downloadURL];
-    }
 }
 
 - (void)downloadAndInstallVersion:(NSString *)version fromURL:(NSURL *)downloadURL {
@@ -1422,6 +1411,7 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
     RainMenuView *_menuView;
     RainUpdater *_updater;
     NSMenuItem *_updateMenuItem;
+    NSMenuItem *_openAtLoginMenuItem;
     NSArray<NSDictionary<NSString *, NSString *> *> *_tracks;
     NSTimer *_rainAnimationTimer;
     NSInteger _rainAnimationFrame;
@@ -1434,8 +1424,9 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
     [self configureTracks];
-    _audio = [[RainAudioController alloc] initWithTrackIdentifier:@"HeavyRuralRain"];
-    _lastNonZeroVolume = _audio.volume;
+    _audio = [[RainAudioController alloc] initWithTrackIdentifier:[self savedTrackIdentifier]];
+    _audio.volume = [self savedVolume];
+    _lastNonZeroVolume = _audio.volume > 0.001f ? _audio.volume : 0.65f;
     _statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
 
     [self configureStatusItem];
@@ -1502,6 +1493,11 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
     _updateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Check for Updates..." action:@selector(checkForUpdates:) keyEquivalent:@""];
     _updateMenuItem.target = self;
     [_statusMenu addItem:_updateMenuItem];
+
+    _openAtLoginMenuItem = [[NSMenuItem alloc] initWithTitle:@"Open at Login" action:@selector(toggleOpenAtLogin:) keyEquivalent:@""];
+    _openAtLoginMenuItem.target = self;
+    [_statusMenu addItem:_openAtLoginMenuItem];
+    [self refreshOpenAtLoginMenuItem];
     [_statusMenu addItem:[NSMenuItem separatorItem]];
 
     NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit Rainbar" action:@selector(quit:) keyEquivalent:@"q"];
@@ -1537,6 +1533,79 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
     [_updater checkManually];
 }
 
+- (void)toggleOpenAtLogin:(id)sender {
+    (void)sender;
+
+    SMAppService *service = [SMAppService mainAppService];
+    NSError *error = nil;
+    BOOL enabled = service.status == SMAppServiceStatusEnabled;
+    BOOL success = enabled ? [service unregisterAndReturnError:&error] : [service registerAndReturnError:&error];
+
+    if (!success) {
+        [self presentOpenAtLoginError:error];
+    }
+
+    [self refreshOpenAtLoginMenuItem];
+}
+
+- (void)refreshOpenAtLoginMenuItem {
+    SMAppServiceStatus status = [SMAppService mainAppService].status;
+    _openAtLoginMenuItem.state = status == SMAppServiceStatusEnabled ? NSControlStateValueOn : NSControlStateValueOff;
+    _openAtLoginMenuItem.enabled = status != SMAppServiceStatusNotFound;
+}
+
+- (void)presentOpenAtLoginError:(NSError *)error {
+    [NSApp activateIgnoringOtherApps:YES];
+
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Rainbar could not change Open at Login";
+    alert.informativeText = error.localizedDescription ?: @"Open System Settings and check Login Items if macOS requires approval.";
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
+}
+
+- (NSString *)savedTrackIdentifier {
+    NSString *savedIdentifier = [[NSUserDefaults standardUserDefaults] stringForKey:RainbarSelectedTrackIdentifierDefaultsKey];
+    if ([self isValidTrackIdentifier:savedIdentifier]) {
+        return savedIdentifier;
+    }
+
+    return @"HeavyRuralRain";
+}
+
+- (float)savedVolume {
+    id savedVolume = [[NSUserDefaults standardUserDefaults] objectForKey:RainbarVolumeDefaultsKey];
+    if ([savedVolume respondsToSelector:@selector(floatValue)]) {
+        return fminf(1.0f, fmaxf(0.0f, [savedVolume floatValue]));
+    }
+
+    return 0.65f;
+}
+
+- (BOOL)isValidTrackIdentifier:(NSString *)trackIdentifier {
+    if (![trackIdentifier isKindOfClass:NSString.class]) {
+        return NO;
+    }
+
+    for (NSDictionary<NSString *, NSString *> *track in _tracks) {
+        if ([track[@"identifier"] isEqualToString:trackIdentifier]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+- (void)saveSelectedTrackIdentifier:(NSString *)trackIdentifier {
+    if ([self isValidTrackIdentifier:trackIdentifier]) {
+        [[NSUserDefaults standardUserDefaults] setObject:trackIdentifier forKey:RainbarSelectedTrackIdentifierDefaultsKey];
+    }
+}
+
+- (void)saveVolume:(float)volume {
+    [[NSUserDefaults standardUserDefaults] setFloat:fminf(1.0f, fmaxf(0.0f, volume)) forKey:RainbarVolumeDefaultsKey];
+}
+
 - (void)statusItemClicked:(id)sender {
     (void)sender;
 
@@ -1560,6 +1629,7 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
     }
 
     [_menuView setSelectedTrackIdentifier:_audio.trackIdentifier];
+    [self saveSelectedTrackIdentifier:_audio.trackIdentifier];
 
     if (!wasPlaying) {
         [self setRainPlaying:YES];
@@ -1604,6 +1674,7 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
 
     _lastNonZeroVolume = clampedVolume;
     _audio.volume = clampedVolume;
+    [self saveVolume:clampedVolume];
 
     if (!_audio.playing) {
         [self setRainPlaying:YES];
@@ -1632,6 +1703,7 @@ static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
     [_menuView setPlaybackEnabled:_audio.playing];
     [_menuView setDisplayedVolume:_audio.playing ? _audio.volume : 0.0f];
     [_menuView setSelectedTrackIdentifier:_audio.trackIdentifier];
+    [self refreshOpenAtLoginMenuItem];
 }
 
 - (void)setStatusImageForPlaying:(BOOL)playing {
