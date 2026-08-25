@@ -54,21 +54,6 @@ Rainbar bundles CC0/public-domain rain audio from Freesound and Rain Sounds for 
 
 Full attribution and source URLs live in [Resources/AudioCredits.txt](Resources/AudioCredits.txt).
 
-## Install
-
-Unzip the download, then move `Rainbar.app` to `/Applications` and open it.
-
-Rainbar requires macOS 13 or newer. The release build is not notarized yet, so macOS may ask you to confirm opening it the first time.
-
-To build locally:
-
-```sh
-git clone https://github.com/grinich/rainbar.git
-cd rainbar
-Scripts/build_app.sh
-open build/Rainbar.app
-```
-
 ## Development
 
 The app is intentionally small:
