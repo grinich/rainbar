@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/grinich/rainbar/releases/latest/download/Rainbar.app.zip">
-    <img src="https://img.shields.io/badge/Download-Rainbar.app.zip-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rainbar.app.zip">
+    <img src="docs/media/download-button.svg" width="312" alt="Download Rainbar for macOS">
   </a>
 </p>
 
