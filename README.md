@@ -29,7 +29,8 @@
 - Randomized start position, so the same track does not always begin the same way.
 - Crossfaded looping to avoid a dead pause when a track repeats.
 - Per-track playback gain normalization, so switching tracks does not swing wildly in volume.
-- No accounts, analytics, network calls, or background services after launch.
+- Built-in GitHub Releases update checks.
+- No accounts, analytics, telemetry, or background services after launch.
 
 ## Rain Tracks
 
@@ -79,6 +80,12 @@ Rainbar streams bundled MP3 files through `AVAudioEngine`. Each track starts fro
 
 The user-facing volume slider is mapped to a perceptual-ish gain curve, and each track has a measured playback gain adjustment so quieter recordings, such as Arizona Monsoon, sit closer to the rest of the library.
 
+## Updates
+
+Rainbar checks GitHub Releases once a day after launch. If a newer release is available, it can download `Rainbar.app.zip`, replace the current app bundle, and relaunch.
+
+You can also check manually from the Rainbar menu.
+
 ## Privacy
 
 Rainbar is local-only:
@@ -87,7 +94,7 @@ Rainbar is local-only:
 - No telemetry.
 - No account system.
 - No cloud sync.
-- No network requests at runtime.
+- No network requests except GitHub release checks and update downloads.
 
 The only bundled media is the audio shipped inside the app bundle.
 

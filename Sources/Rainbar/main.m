@@ -2,6 +2,429 @@
 #import <AVFoundation/AVFoundation.h>
 #import <math.h>
 #import <stdlib.h>
+#import <unistd.h>
+
+static NSString *const RainbarErrorDomain = @"com.grinich.rainbar";
+
+@interface RainUpdater : NSObject
+
+@property (nonatomic, copy) void (^busyHandler)(BOOL busy);
+
+- (instancetype)initWithOwner:(NSString *)owner
+                         repo:(NSString *)repo
+                    assetName:(NSString *)assetName;
+- (void)checkAutomatically;
+- (void)checkManually;
+
+@end
+
+@implementation RainUpdater {
+    NSString *_owner;
+    NSString *_repo;
+    NSString *_assetName;
+    BOOL _busy;
+    NSURLSessionDataTask *_releaseTask;
+    NSURLSessionDownloadTask *_downloadTask;
+}
+
+- (instancetype)initWithOwner:(NSString *)owner
+                         repo:(NSString *)repo
+                    assetName:(NSString *)assetName {
+    self = [super init];
+    if (!self) {
+        return nil;
+    }
+
+    _owner = [owner copy];
+    _repo = [repo copy];
+    _assetName = [assetName copy];
+
+    return self;
+}
+
+- (void)checkAutomatically {
+    NSDate *lastCheckDate = [[NSUserDefaults standardUserDefaults] objectForKey:@"RainbarLastUpdateCheckDate"];
+    if ([lastCheckDate isKindOfClass:NSDate.class] && [[NSDate date] timeIntervalSinceDate:lastCheckDate] < (24.0 * 60.0 * 60.0)) {
+        return;
+    }
+
+    [self checkForUpdatesPresentingNoUpdate:NO];
+}
+
+- (void)checkManually {
+    [self checkForUpdatesPresentingNoUpdate:YES];
+}
+
+- (void)checkForUpdatesPresentingNoUpdate:(BOOL)presentNoUpdate {
+    if (_busy) {
+        return;
+    }
+
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://api.github.com/repos/%@/%@/releases/latest", _owner, _repo]];
+    if (!url) {
+        return;
+    }
+
+    [self setBusy:YES];
+    [[NSUserDefaults standardUserDefaults] setObject:[NSDate date] forKey:@"RainbarLastUpdateCheckDate"];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.timeoutInterval = 20.0;
+    [request setValue:@"application/vnd.github+json" forHTTPHeaderField:@"Accept"];
+    [request setValue:[NSString stringWithFormat:@"Rainbar/%@", [self currentVersion]] forHTTPHeaderField:@"User-Agent"];
+
+    __weak typeof(self) weakSelf = self;
+    _releaseTask = [[NSURLSession sharedSession] dataTaskWithRequest:request
+                                                   completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf handleReleaseResponseData:data response:response error:error presentingNoUpdate:presentNoUpdate];
+        });
+    }];
+    [_releaseTask resume];
+}
+
+- (void)handleReleaseResponseData:(NSData *)data
+                          response:(NSURLResponse *)response
+                             error:(NSError *)error
+                presentingNoUpdate:(BOOL)presentNoUpdate {
+    _releaseTask = nil;
+    [self setBusy:NO];
+
+    if (error) {
+        [self presentErrorIfNeeded:error presenting:presentNoUpdate];
+        return;
+    }
+
+    NSHTTPURLResponse *httpResponse = [response isKindOfClass:NSHTTPURLResponse.class] ? (NSHTTPURLResponse *)response : nil;
+    if (httpResponse.statusCode < 200 || httpResponse.statusCode >= 300) {
+        NSError *statusError = [self errorWithDescription:[NSString stringWithFormat:@"GitHub returned HTTP %ld while checking for updates.", (long)httpResponse.statusCode]
+                                                     code:20];
+        [self presentErrorIfNeeded:statusError presenting:presentNoUpdate];
+        return;
+    }
+
+    NSError *jsonError = nil;
+    id jsonObject = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    if (!jsonObject || ![jsonObject isKindOfClass:NSDictionary.class]) {
+        [self presentErrorIfNeeded:jsonError ?: [self errorWithDescription:@"GitHub returned an unreadable update response." code:21]
+                         presenting:presentNoUpdate];
+        return;
+    }
+
+    NSDictionary *release = (NSDictionary *)jsonObject;
+    NSString *tagName = [release[@"tag_name"] isKindOfClass:NSString.class] ? release[@"tag_name"] : nil;
+    NSString *latestVersion = [self normalizedVersionString:tagName];
+    NSURL *downloadURL = [self downloadURLFromRelease:release];
+
+    if (latestVersion.length == 0 || !downloadURL) {
+        [self presentErrorIfNeeded:[self errorWithDescription:@"The latest GitHub release does not include a Rainbar app download." code:22]
+                         presenting:presentNoUpdate];
+        return;
+    }
+
+    NSString *currentVersion = [self currentVersion];
+    if ([self compareVersion:latestVersion toVersion:currentVersion] != NSOrderedDescending) {
+        if (presentNoUpdate) {
+            [self presentInformationalAlertWithTitle:@"Rainbar is up to date"
+                                             message:[NSString stringWithFormat:@"You are running Rainbar %@.", currentVersion]];
+        }
+        return;
+    }
+
+    [self presentUpdateAlertForVersion:latestVersion downloadURL:downloadURL];
+}
+
+- (NSURL *)downloadURLFromRelease:(NSDictionary *)release {
+    NSArray *assets = [release[@"assets"] isKindOfClass:NSArray.class] ? release[@"assets"] : nil;
+    for (id assetObject in assets) {
+        if (![assetObject isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+
+        NSDictionary *asset = (NSDictionary *)assetObject;
+        NSString *name = [asset[@"name"] isKindOfClass:NSString.class] ? asset[@"name"] : nil;
+        NSString *urlString = [asset[@"browser_download_url"] isKindOfClass:NSString.class] ? asset[@"browser_download_url"] : nil;
+        if ([name isEqualToString:_assetName] && urlString.length > 0) {
+            return [NSURL URLWithString:urlString];
+        }
+    }
+
+    return nil;
+}
+
+- (void)presentUpdateAlertForVersion:(NSString *)version downloadURL:(NSURL *)downloadURL {
+    [NSApp activateIgnoringOtherApps:YES];
+
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = [NSString stringWithFormat:@"Rainbar %@ is available", version];
+    alert.informativeText = @"Download and install the latest release now? Rainbar will quit and relaunch after updating.";
+    [alert addButtonWithTitle:@"Update and Relaunch"];
+    [alert addButtonWithTitle:@"Later"];
+
+    if ([alert runModal] == NSAlertFirstButtonReturn) {
+        [self downloadAndInstallVersion:version fromURL:downloadURL];
+    }
+}
+
+- (void)downloadAndInstallVersion:(NSString *)version fromURL:(NSURL *)downloadURL {
+    if (_busy) {
+        return;
+    }
+
+    [self setBusy:YES];
+
+    __weak typeof(self) weakSelf = self;
+    _downloadTask = [[NSURLSession sharedSession] downloadTaskWithURL:downloadURL
+                                                    completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+        (void)response;
+        if (error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf setBusy:NO];
+                [weakSelf presentErrorIfNeeded:error presenting:YES];
+            });
+            return;
+        }
+
+        [weakSelf extractAndInstallDownloadedZipAtURL:location version:version];
+    }];
+    [_downloadTask resume];
+}
+
+- (void)extractAndInstallDownloadedZipAtURL:(NSURL *)location version:(NSString *)version {
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    NSURL *updateDirectory = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES] URLByAppendingPathComponent:[[NSUUID UUID] UUIDString] isDirectory:YES];
+    NSURL *zipURL = [updateDirectory URLByAppendingPathComponent:_assetName];
+
+    NSError *error = nil;
+    if (![fileManager createDirectoryAtURL:updateDirectory withIntermediateDirectories:YES attributes:nil error:&error] ||
+        ![fileManager moveItemAtURL:location toURL:zipURL error:&error]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setBusy:NO];
+            [self presentErrorIfNeeded:error presenting:YES];
+        });
+        return;
+    }
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSError *extractError = nil;
+        if (![self extractZipAtURL:zipURL intoDirectory:updateDirectory error:&extractError]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self setBusy:NO];
+                [self presentErrorIfNeeded:extractError presenting:YES];
+            });
+            return;
+        }
+
+        NSURL *newAppURL = [updateDirectory URLByAppendingPathComponent:@"Rainbar.app" isDirectory:YES];
+        if (![self validateAppAtURL:newAppURL expectedVersion:version error:&extractError]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self setBusy:NO];
+                [self presentErrorIfNeeded:extractError presenting:YES];
+            });
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setBusy:NO];
+            [self installExtractedAppAtURL:newAppURL updateDirectory:updateDirectory];
+        });
+    });
+}
+
+- (BOOL)extractZipAtURL:(NSURL *)zipURL intoDirectory:(NSURL *)directoryURL error:(NSError **)error {
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = @"/usr/bin/ditto";
+    task.arguments = @[@"-x", @"-k", zipURL.path, directoryURL.path];
+
+    NSPipe *errorPipe = [NSPipe pipe];
+    task.standardError = errorPipe;
+
+    @try {
+        [task launch];
+        [task waitUntilExit];
+    } @catch (NSException *exception) {
+        if (error) {
+            *error = [self errorWithDescription:[NSString stringWithFormat:@"Could not unzip the Rainbar update: %@", exception.reason]
+                                           code:30];
+        }
+        return NO;
+    }
+
+    if (task.terminationStatus != 0) {
+        NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
+        NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
+        if (error) {
+            *error = [self errorWithDescription:errorOutput.length > 0 ? errorOutput : @"Could not unzip the Rainbar update."
+                                           code:31];
+        }
+        return NO;
+    }
+
+    return YES;
+}
+
+- (BOOL)validateAppAtURL:(NSURL *)appURL expectedVersion:(NSString *)expectedVersion error:(NSError **)error {
+    NSBundle *bundle = [NSBundle bundleWithURL:appURL];
+    if (!bundle) {
+        if (error) {
+            *error = [self errorWithDescription:@"The downloaded update did not contain Rainbar.app." code:40];
+        }
+        return NO;
+    }
+
+    NSString *bundleIdentifier = bundle.bundleIdentifier;
+    NSString *version = [bundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    if (![bundleIdentifier isEqualToString:@"com.grinich.rainbar"] ||
+        [self compareVersion:[self normalizedVersionString:version] toVersion:expectedVersion] != NSOrderedSame) {
+        if (error) {
+            *error = [self errorWithDescription:@"The downloaded app did not match the expected Rainbar release." code:41];
+        }
+        return NO;
+    }
+
+    return YES;
+}
+
+- (void)installExtractedAppAtURL:(NSURL *)newAppURL updateDirectory:(NSURL *)updateDirectory {
+    NSURL *currentAppURL = NSBundle.mainBundle.bundleURL.URLByResolvingSymlinksInPath;
+    NSURL *parentURL = currentAppURL.URLByDeletingLastPathComponent;
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+
+    if (![fileManager isWritableFileAtPath:currentAppURL.path] || ![fileManager isWritableFileAtPath:parentURL.path]) {
+        [self presentErrorIfNeeded:[self errorWithDescription:@"Rainbar does not have permission to replace the current app. Download the latest release from GitHub and replace Rainbar.app manually."
+                                                         code:50]
+                         presenting:YES];
+        return;
+    }
+
+    NSURL *scriptURL = [updateDirectory URLByAppendingPathComponent:@"install-rainbar-update.sh"];
+    NSString *script = @"#!/bin/sh\n"
+        "APP_PATH=\"$1\"\n"
+        "NEW_APP=\"$2\"\n"
+        "APP_PID=\"$3\"\n"
+        "UPDATE_DIR=\"$4\"\n"
+        "while kill -0 \"$APP_PID\" 2>/dev/null; do\n"
+        "  sleep 0.2\n"
+        "done\n"
+        "BACKUP=\"${APP_PATH}.previous\"\n"
+        "rm -rf \"$BACKUP\"\n"
+        "if [ -e \"$APP_PATH\" ]; then\n"
+        "  mv \"$APP_PATH\" \"$BACKUP\" || exit 1\n"
+        "fi\n"
+        "if /usr/bin/ditto \"$NEW_APP\" \"$APP_PATH\"; then\n"
+        "  /usr/bin/xattr -dr com.apple.quarantine \"$APP_PATH\" 2>/dev/null || true\n"
+        "  /usr/bin/open \"$APP_PATH\"\n"
+        "  rm -rf \"$BACKUP\"\n"
+        "  rm -rf \"$UPDATE_DIR\"\n"
+        "  exit 0\n"
+        "fi\n"
+        "rm -rf \"$APP_PATH\"\n"
+        "if [ -e \"$BACKUP\" ]; then\n"
+        "  mv \"$BACKUP\" \"$APP_PATH\"\n"
+        "  /usr/bin/open \"$APP_PATH\"\n"
+        "fi\n"
+        "exit 1\n";
+
+    NSError *error = nil;
+    if (![script writeToURL:scriptURL atomically:YES encoding:NSUTF8StringEncoding error:&error] ||
+        ![fileManager setAttributes:@{NSFilePosixPermissions: @0700} ofItemAtPath:scriptURL.path error:&error]) {
+        [self presentErrorIfNeeded:error presenting:YES];
+        return;
+    }
+
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = @"/bin/sh";
+    task.arguments = @[scriptURL.path, currentAppURL.path, newAppURL.path, [NSString stringWithFormat:@"%d", getpid()], updateDirectory.path];
+
+    @try {
+        [task launch];
+    } @catch (NSException *exception) {
+        [self presentErrorIfNeeded:[self errorWithDescription:[NSString stringWithFormat:@"Could not start the updater: %@", exception.reason] code:51]
+                         presenting:YES];
+        return;
+    }
+
+    [NSApp terminate:nil];
+}
+
+- (NSString *)currentVersion {
+    NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    return [self normalizedVersionString:version] ?: @"0";
+}
+
+- (NSString *)normalizedVersionString:(NSString *)version {
+    if (![version isKindOfClass:NSString.class]) {
+        return nil;
+    }
+
+    NSString *normalized = [version stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if ([normalized hasPrefix:@"v"] || [normalized hasPrefix:@"V"]) {
+        normalized = [normalized substringFromIndex:1];
+    }
+
+    return normalized;
+}
+
+- (NSComparisonResult)compareVersion:(NSString *)leftVersion toVersion:(NSString *)rightVersion {
+    NSArray<NSString *> *leftParts = [[self normalizedVersionString:leftVersion] componentsSeparatedByString:@"."];
+    NSArray<NSString *> *rightParts = [[self normalizedVersionString:rightVersion] componentsSeparatedByString:@"."];
+    NSUInteger count = MAX(leftParts.count, rightParts.count);
+
+    for (NSUInteger index = 0; index < count; index++) {
+        NSInteger leftValue = index < leftParts.count ? leftParts[index].integerValue : 0;
+        NSInteger rightValue = index < rightParts.count ? rightParts[index].integerValue : 0;
+
+        if (leftValue < rightValue) {
+            return NSOrderedAscending;
+        }
+
+        if (leftValue > rightValue) {
+            return NSOrderedDescending;
+        }
+    }
+
+    return NSOrderedSame;
+}
+
+- (NSError *)errorWithDescription:(NSString *)description code:(NSInteger)code {
+    return [NSError errorWithDomain:RainbarErrorDomain
+                               code:code
+                           userInfo:@{NSLocalizedDescriptionKey: description ?: @"Rainbar update failed."}];
+}
+
+- (void)presentErrorIfNeeded:(NSError *)error presenting:(BOOL)presenting {
+    if (!presenting) {
+        NSLog(@"Rainbar update check failed: %@", error.localizedDescription);
+        return;
+    }
+
+    [NSApp activateIgnoringOtherApps:YES];
+
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Rainbar could not update";
+    alert.informativeText = error.localizedDescription ?: @"An unknown update error occurred.";
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
+}
+
+- (void)presentInformationalAlertWithTitle:(NSString *)title message:(NSString *)message {
+    [NSApp activateIgnoringOtherApps:YES];
+
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = title;
+    alert.informativeText = message;
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
+}
+
+- (void)setBusy:(BOOL)busy {
+    _busy = busy;
+    if (self.busyHandler) {
+        self.busyHandler(busy);
+    }
+}
+
+@end
 
 @interface RainAudioController : NSObject
 
@@ -997,6 +1420,8 @@
     NSStatusItem *_statusItem;
     NSMenu *_statusMenu;
     RainMenuView *_menuView;
+    RainUpdater *_updater;
+    NSMenuItem *_updateMenuItem;
     NSArray<NSDictionary<NSString *, NSString *> *> *_tracks;
     NSTimer *_rainAnimationTimer;
     NSInteger _rainAnimationFrame;
@@ -1015,7 +1440,9 @@
 
     [self configureStatusItem];
     [self configureMenu];
+    [self configureUpdater];
     [self prewarmAudio];
+    [self scheduleAutomaticUpdateCheck];
 }
 
 - (void)configureStatusItem {
@@ -1072,9 +1499,42 @@
     [_statusMenu addItem:controlsItem];
     [_statusMenu addItem:[NSMenuItem separatorItem]];
 
+    _updateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Check for Updates..." action:@selector(checkForUpdates:) keyEquivalent:@""];
+    _updateMenuItem.target = self;
+    [_statusMenu addItem:_updateMenuItem];
+    [_statusMenu addItem:[NSMenuItem separatorItem]];
+
     NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit Rainbar" action:@selector(quit:) keyEquivalent:@"q"];
     quitItem.target = self;
     [_statusMenu addItem:quitItem];
+}
+
+- (void)configureUpdater {
+    _updater = [[RainUpdater alloc] initWithOwner:@"grinich"
+                                             repo:@"rainbar"
+                                        assetName:@"Rainbar.app.zip"];
+
+    __weak typeof(self) weakSelf = self;
+    _updater.busyHandler = ^(BOOL busy) {
+        [weakSelf setUpdateBusy:busy];
+    };
+}
+
+- (void)scheduleAutomaticUpdateCheck {
+    RainUpdater *updater = _updater;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [updater checkAutomatically];
+    });
+}
+
+- (void)setUpdateBusy:(BOOL)busy {
+    _updateMenuItem.enabled = !busy;
+    _updateMenuItem.title = busy ? @"Updating Rainbar..." : @"Check for Updates...";
+}
+
+- (void)checkForUpdates:(id)sender {
+    (void)sender;
+    [_updater checkManually];
 }
 
 - (void)statusItemClicked:(id)sender {
