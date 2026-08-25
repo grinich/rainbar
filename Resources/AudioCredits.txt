@@ -61,6 +61,15 @@ License: CC0
 Bundled as:
 - Bangladesh Rain Street
 
+Rainbar bundles the Freesound preview MP3 of "Rainy night".
+
+Author: DragonOfDoom
+Source: https://freesound.org/people/DragonOfDoom/sounds/530101/
+License: CC0
+
+Bundled as:
+- Mumbai Rain
+
 Rainbar bundles the Freesound preview MP3 of "Arizona Monsoon, Rain sound".
 
 Author: Xfrtrex
