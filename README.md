@@ -56,20 +56,13 @@ Full attribution and source URLs live in [Resources/AudioCredits.txt](Resources/
 
 ## Install
 
-Download the latest build from [GitHub Releases](https://github.com/grinich/rainbar/releases/latest):
+<p align="center">
+  <a href="https://github.com/grinich/rainbar/releases/latest/download/Rainbar.app.zip">
+    <img src="https://img.shields.io/badge/Download-Rainbar.app.zip-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rainbar.app.zip">
+  </a>
+</p>
 
-```sh
-curl -L -o Rainbar.app.zip https://github.com/grinich/rainbar/releases/latest/download/Rainbar.app.zip
-unzip Rainbar.app.zip
-open Rainbar.app
-```
-
-To install it into Applications:
-
-```sh
-mv Rainbar.app /Applications/Rainbar.app
-open /Applications/Rainbar.app
-```
+Unzip the download, then move `Rainbar.app` to `/Applications` and open it.
 
 Rainbar requires macOS 13 or newer. The release build is not notarized yet, so macOS may ask you to confirm opening it the first time.
 
