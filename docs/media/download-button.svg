@@ -6,12 +6,8 @@
       <stop offset="0" stop-color="#2bb8ff"/>
       <stop offset="1" stop-color="#0877f2"/>
     </linearGradient>
-    <filter id="shadow" x="-12%" y="-28%" width="124%" height="156%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#006edb" flood-opacity="0.28"/>
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#003d7a" flood-opacity="0.18"/>
-    </filter>
   </defs>
-  <g filter="url(#shadow)">
+  <g>
     <rect x="10" y="8" width="292" height="58" rx="18" fill="url(#buttonGradient)"/>
     <rect x="10.75" y="8.75" width="290.5" height="56.5" rx="17.25" fill="none" stroke="#ffffff" stroke-opacity="0.34" stroke-width="1.5"/>
   </g>
@@ -20,6 +16,5 @@
     <path d="M41 34l9 9 9-9"/>
     <path d="M35 51h30"/>
   </g>
-  <text x="82" y="34" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Download Rainbar</text>
-  <text x="82" y="52" fill="#dff3ff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="500">Latest macOS app zip</text>
+  <text x="82" y="44" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="22" font-weight="700">Download Rainbar</text>
 </svg>
