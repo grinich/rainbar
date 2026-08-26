@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/grinich/rainbar/releases/latest/download/Rainbar.app.zip">
+  <a href="https://github.com/grinich/rainbar/releases/latest/download/Rainbar.dmg">
     <img src="docs/media/download-button-flat.svg" width="312" alt="Download Rainbar for macOS">
   </a>
 </p>
@@ -67,6 +67,7 @@ Sources/Rainbar/main.m      AppKit UI, menu bar icon drawing, audio playback
 Resources/Audio/            Bundled CC0 rain tracks
 Resources/AudioCredits.txt  Source and license notes for bundled audio
 Scripts/build_app.sh        Local app bundle build script
+Scripts/create_dmg.sh       Local DMG packaging script
 ```
 
 Build from source:
@@ -75,7 +76,7 @@ Build from source:
 Scripts/build_app.sh
 ```
 
-The build writes `build/Rainbar.app`. It uses only Apple system frameworks: AppKit and AVFoundation.
+The build writes `build/Rainbar.app`. The DMG script writes `build/Rainbar.dmg`. Rainbar uses only Apple system frameworks: AppKit and AVFoundation.
 
 ## Audio Behavior
 
